@@ -7,6 +7,7 @@ class Standard_PageRank:
         self.int2node = int2node
         self.alpa = alpha
         self.n_iter = n_iter
+        self.epsillon = 1e-8
 
     def make_pagerank_matrix(self, G, alpha):
         n_nodes = len(G.nodes())
@@ -34,7 +35,6 @@ class Standard_PageRank:
     
 
     def random_walk(self, G, alpha, n_iter):
-        convergence = 1e-6
         n_nodes = len(G.nodes())
 
         new_state = np.ones(n_nodes) / n_nodes
@@ -46,7 +46,7 @@ class Standard_PageRank:
             new_state = pagerank_matrix.T @ old_state
             l2 = np.linalg.norm(new_state - old_state, ord=1)
             L2.append(l2)
-            if l2 < convergence: break
+            if l2 < self.epsillon: break
         return new_state, L2
     
     def run(self):

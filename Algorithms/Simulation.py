@@ -7,6 +7,7 @@ class Simulation_PageRank:
         self.initial_points = None
         self.int2node = int2node
         self.NUMBER_OF_ITERATION = iteration
+        self.epsillon = 1e-8
         self.initialization()
 
     def initialization(self):
@@ -29,7 +30,6 @@ class Simulation_PageRank:
         return update_point
 
     def run(self):
-        convergence = 1e-6
         prev_points = self.initial_points
         iteration = 0
         L2 = []
@@ -37,6 +37,6 @@ class Simulation_PageRank:
             update_points = self.update(self.graph, prev_points)
             l2 = np.linalg.norm(update_points-prev_points)
             L2.append(l2)
-            if np.all(np.abs(update_points - prev_points) <= convergence): break
+            if np.all(np.abs(update_points - prev_points) <= self.epsillon): break
             prev_points, iteration = update_points, iteration+1
         return prev_points, L2
