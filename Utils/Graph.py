@@ -7,7 +7,6 @@ class Graph:
     @staticmethod
     def make_graph(G, tras_zero_degree=True):        
         # Convert to directed graph if not already
-        print("Number of Nodes : ", len(G.nodes()))
         if not nx.is_directed(G):
             print('Graph converted to directed..')
             G = G.to_directed() 
@@ -39,6 +38,19 @@ class Graph:
                     target_node = random.choice(all_nodes)
                 G.add_edge(node, target_node)
 
+        # Code for adding extra edges
+        # num_nodes = len(G.nodes())
+        # max_edges = int(0.1 * num_nodes * (num_nodes - 1) / 2)
+        # added_edges = 0
+        # while added_edges < max_edges:
+        #     u = random.randint(0, num_nodes - 1)
+        #     v = random.randint(0, num_nodes - 1)
+        #     if u != v and not G.has_edge(u, v):
+        #         G.add_edge(u, v)
+        #         added_edges += 1
+
+        print("Number of Nodes : ", len(G.nodes()))
+        print("Number of Edges : ", len(G.edges()))
         W = Graph.build_weight_matrix(G)
         return G, int2node, W
     
