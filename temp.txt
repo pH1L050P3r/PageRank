@@ -1,0 +1,948 @@
+#!/usr/bin/env python
+import time
+start = time.time()
+import sys
+import numpy as np
+import networkx as nx
+from copy import copy
+
+
+import matplotlib
+matplotlib.use('TKAgg')
+import matplotlib.pyplot as plt
+
+import warnings
+warnings.filterwarnings('ignore')
+
+
+def make_graph(G):
+    prinswitch_backendt('Directed:', nx.is_directed(G))
+    print('Weighted:', nx.is_weighted(G))
+    print()
+    
+    # converting to directed Graph for PageRank
+    if not nx.is_directed(G):
+        print('Graph converted to directed..')
+        G = G.to_directed()    
+
+    print('Directed:', nx.is_directed(G))
+    print()
+
+    # labelling nodes as integers
+    print('Relabelling nodes to integers..')
+    n_unique_nodes = len(set(G.nodes()))
+    node2int = dict(zip(set(G.nodes()), range(n_unique_nodes)))
+    int2node = {v:k for k,v in node2int.items()}
+
+    G = nx.relabel_nodes(G, node2int)
+
+    # remove isolated nodes
+    print('Removing isolated nodes..')
+    # remove isolated nodes
+    isolated_nodes = [node for node in G.nodes() if len(G.edges(node)) == 0]
+    G.remove_nodes_from(isolated_nodes)
+
+    # nodes = G.nodes()
+    # for node in nodes:
+    #     if len(G.edges(node))==0:
+    #         G.remove_node(node)
+    return G, int2node
+
+class WeightedGraph():
+    def __init__(self, edges) -> None:
+        # initialize objects
+        nodes = set()
+        indegrees = {}
+        outdegrees = {}
+        # determine the unique set of nodes in the graph, and count number of outbound edges per source node
+        for edge in edges:
+            nodes.update(list(edge))
+            src, dst = edge
+            try:
+                outdegrees[src] += 1
+            except:
+                outdegrees[src] = 1
+            try:
+                indegrees[dst] += 1
+            except:
+                indegrees[dst] = 1
+        nodes = list(nodes)
+        nodes.sort()
+        # store graph data
+        self.edges = edges
+        self.nodes = nodes
+        self.number_nodes = len(nodes)
+        self.number_edges = len(edges)
+        self.indegrees = indegrees
+        self.outdegrees = outdegrees
+        
+    def _build_weight_matrix(self) -> np.array:
+        W = np.zeros((len(self.nodes),len(self.nodes)))
+        edges = np.array(self.edges)
+        for node in self.nodes:
+            # get all outgoing link nodes from node
+            out_nodes = np.unique(edges[edges[:,0] == node][:,1])
+            # get counts of incoming and outgoing links for all out_nodes
+            I = np.array(list(map(self.indegrees.get, out_nodes)))
+            I[I == None] = 0
+            O = np.array(list(map(self.outdegrees.get, out_nodes)))
+            O[O == None] = 0
+            # compute weight components
+            w_in = I/np.sum(I)
+            w_out = O/np.sum(O)
+            # fill in weights matrix
+            col_idx = [self.nodes.index(node) for node in out_nodes]
+            W[self.nodes.index(node),col_idx] = w_in*w_out
+        return W
+
+    def get_weighted_adjacency_matrix(self) -> np.array:
+        # get the raw weight matrix
+        W = self._build_weight_matrix()
+        # normalize weights & return
+        denominator = np.sum(W,axis=1)
+        denominator = np.where(denominator == 0, 1., denominator)
+        return (W.T/denominator)
+    def _build_adjacency_matrix(self) -> np.array:
+        # work out adjacency matrix
+        O = np.zeros((self.number_nodes,self.number_nodes))
+        for edge in self.edges:
+            src, dst = edge
+            O[self.nodes.index(dst),self.nodes.index(src)] += 1
+        return O
+
+    def _build_outdegree_matrix(self) -> np.array:
+        D = np.zeros((self.number_nodes,self.number_nodes))
+        for node in self.nodes:
+            try:
+                D[self.nodes.index(node),self.nodes.index(node)] = 1/self.outdegrees[node]
+            except:
+                D[self.nodes.index(node),self.nodes.index(node)] = 0
+        return D
+    
+    def get_modified_adjacency_matrix(self) -> np.array:
+        return np.matmul(self._build_adjacency_matrix(),self._build_outdegree_matrix())
+    
+    def get_edges(self):
+        return self.edges
+
+    def get_nodes(self) :
+        return self.nodes
+
+    def get_number_edges(self) -> int:
+        return self.number_edges
+
+    def get_number_nodes(self) -> int:
+        return self.number_nodes
+
+    def get_indegrees(self) -> dict:
+        return self.indegrees
+    
+    def get_outdegrees(self) -> dict:
+        return self.outdegrees
+
+
+
+
+
+
+
+def plot_graph(G, final_probs, int2node, bool_final_probs=False):
+    labels = int2node
+    try:
+        clubs = np.array(list(map(lambda x: G.nodes[x]['club'], G.nodes())))
+        labels = dict(zip(G.nodes(), clubs)) 
+    except:
+        pass   
+
+    plt.figure(figsize=(8, 6))
+    if not bool_final_probs:
+        nx.draw(G, with_labels=True, alpha=0.8, arrows=False, labels=labels)
+    else:
+        pos = nx.spring_layout(G) 
+        nodes = nx.draw(G, pos, with_labels=True, alpha=0.8, arrows=False, node_color=final_probs, cmap=plt.get_cmap('viridis'), labels=labels)
+        sm = plt.cm.ScalarMappable(cmap=plt.get_cmap('viridis'), norm=plt.Normalize(vmin=min(final_probs), vmax=max(final_probs)))
+        sm.set_array([])
+        plt.colorbar(sm, ax=plt.gca())
+
+    plt.show()
+    return plt
+
+
+
+
+def make_pagerank_matrix(G, alpha):
+    n_nodes = len(G.nodes())
+    adj_matrix = np.zeros(shape=(n_nodes, n_nodes))
+    for edge in G.edges():
+        adj_matrix[edge[0], edge[1]] = 1
+
+    tran_matrix = adj_matrix / np.sum#!/usr/bin/env python
+import sys
+import numpy as np
+import networkx as nx
+from copy import copy
+
+
+import matplotlib
+matplotlib.use('TKAgg')
+import matplotlib.pyplot as plt
+
+import warnings
+warnings.filterwarnings('ignore')
+
+
+def make_graph(G):
+    print('Directed:', nx.is_directed(G))
+    print('Weighted:', nx.is_weighted(G))
+    print()
+    
+    # converting to directed Graph for PageRank
+    if not nx.is_directed(G):
+        print('Graph converted to directed..')
+        G = G.to_directed()    
+
+    print('Directed:', nx.is_directed(G))
+    print()
+
+    # labelling nodes as integers
+    print('Relabelling nodes to integers..')
+    n_unique_nodes = len(set(G.nodes()))
+    node2int = dict(zip(set(G.nodes()), range(n_unique_nodes)))
+    int2node = {v:k for k,v in node2int.items()}
+
+    G = nx.relabel_nodes(G, node2int)
+
+    # remove isolated nodes
+    print('Removing isolated nodes..')
+    # remove isolated nodes
+    isolated_nodes = [node for node in G.nodes() if len(G.edges(node)) == 0]
+    G.remove_nodes_from(isolated_nodes)
+
+    # nodes = G.nodes()
+    # for node in nodes:
+    #     if len(G.edges(node))==0:
+    #         G.remove_node(node)
+    return G, int2node
+
+
+
+def plot_graph(G, final_probs, int2node, bool_final_probs=False):
+    labels = int2node
+    try:
+        clubs = np.array(list(map(lambda x: G.nodes[x]['club'], G.nodes())))
+        labels = dict(zip(G.nodes(), clubs)) 
+    except:
+        pass   
+
+    plt.figure(figsize=(8, 6))
+    if not bool_final_probs:
+        nx.draw(G, with_labels=True, alpha=0.8, arrows=False, labels=labels)
+    else:
+        pos = nx.spring_layout(G) 
+        nodes = nx.draw(G, pos, with_labels=True, alpha=0.8, arrows=False, node_color=final_probs, cmap=plt.get_cmap('viridis'), labels=labels)
+        sm = plt.cm.ScalarMappable(cmap=plt.get_cmap('viridis'), norm=plt.Normalize(vmin=min(final_probs), vmax=max(final_probs)))
+        sm.set_array([])
+        plt.colorbar(sm, ax=plt.gca())
+
+    plt.show()
+    return plt
+
+
+
+
+def make_pagerank_matrix(G, alpha):
+    n_nodes = len(G.nodes())
+    adj_matrix = np.zeros(shape=(n_nodes, n_nodes))
+    for edge in G.edges():
+        # print(edge)
+        adj_matrix[edge[0], edge[1]] = 1
+
+    tran_matrix = adj_matrix / np.sum(adj_matrix, axis=1).reshape(-1,1)
+    random_surf = np.ones(shape = (n_nodes, n_nodes)) / n_nodes    
+    absorbing_nodes = np.zeros(shape = (n_nodes,))
+    for node in G.nodes():
+        if len(G.out_edges(node))==0:
+            absorbing_nodes[node] = 1
+    absorbing_node_matrix = np.outer(absorbing_nodes, np.ones(shape = (n_nodes,))) / n_nodes
+    stochastic_matrix = tran_matrix + absorbing_node_matrix
+    pagerank_matrix = alpha * stochastic_matrix + (1-alpha) * random_surf
+    return pagerank_matrix
+
+
+def random_walk(G, alpha, n_iter):
+    n_nodes = len(G.nodes())
+    initial_state = np.ones(shape=(n_nodes,)) / n_nodes
+    pagerank_matrix = make_pagerank_matrix1(G, alpha)
+
+    new_initial_state = initial_state
+    print('Running random walk..')
+    NORM = []
+    for i in range(n_iter):
+        final_state = np.dot(np.transpose(pagerank_matrix), new_initial_state)
+        
+        prev_initial_state = new_initial_state
+        new_initial_state = final_state
+        L2 = np.linalg.norm(new_initial_state-prev_initial_state)
+        NORM.append(L2)
+        if np.allclose(new_initial_state, prev_initial_state):
+            print(f'Converged at {i+1} iterations..')
+            break
+
+    plt.figure(figsize=(5,4))
+    plt.plot(range(i+1), NORM)
+    plt.xlabel('iterations')
+    plt.ylabel('Euclidean Norm')
+    plt.title('Convergence plot')
+    plt.show()
+    return final_state
+import random
+
+def run(G, alpha, n_iter):
+    G, int2node = make_graph(G)
+    print('Number of nodes: ', len(G.nodes()))
+    print('Number of edges: ', len(G.edges())) 
+    # print()    
+
+    final_probs = random_walk(G, alpha, n_iter)
+    assert len(final_probs) == len(G.nodes())
+    assert np.allclose(np.sum(final_probs), 1)
+
+    print()
+    print('Pagerank importances..')
+    print(final_probs)
+
+    plt.figure(figsize=(25,8))
+    plt.subplot(121)
+    plot_graph(G, None, int2node, bool_final_probs=False)
+    plt.subplot(122)
+    plot_graph(G, final_probs, int2node, bool_final_probs=True)
+    plt.show()
+    return final_probs
+
+def get_Subgraph(G, prob=0.01):
+    List_of_nodes = list(G.nodes())
+    Number_of_nodes = len(List_of_nodes)
+    sample_size = int(Number_of_nodes*prob)
+    RandomSample = random.sample(List_of_nodes, sample_size)
+    # G.remove_nodes_from(RandomSample)
+    return RandomSample
+
+def run1(G, alpha, n_iter):
+    G, int2node = make_graph(G)
+    print('Number of nodes: ', len(G.nodes()))
+    print('Number of edges: ', len(G.edges())) 
+    # Create a subgraph with a specified probability of nodes to include
+    subgraph_nodes = get_Subgraph(G, prob=0.01)  # Change probability as needed
+    G_subgraph = G.subgraph(subgraph_nodes).copy()  # Create a subgraph
+
+    # Ensure the subgraph is valid
+    print('Subgraph Number of nodes: ', len(G_subgraph.nodes()))
+    print('Subgraph Number of edges: ', len(G_subgraph.edges()))
+
+    final_probs = random_walk(G_subgraph, alpha, n_iter)  # Use subgraph for PageRank
+    assert len(final_probs) == len(G_subgraph.nodes())
+    assert np.allclose(np.sum(final_probs), 1)
+
+    print()
+    print('Pagerank importances..')
+    print(final_probs)
+
+    plt.figure(figsize=(25,8))
+    plt.subplot(121)
+    plot_graph(G_subgraph, None, int2node, bool_final_probs=False)
+    plt.subplot(122)
+    plot_graph(G_subgraph, final_probs, int2node, bool_final_probs=True)
+    plt.show()
+    return final_probs
+
+def make_pagerank_matrix1(G, alpha):
+    n_nodes = len(G.nodes())
+    adj_matrix = np.zeros(shape=(n_nodes, n_nodes))
+
+    # Use the relabeled nodes for constructing the adjacency matrix
+    for edge in G.edges():
+        adj_matrix[G.nodes().index(edge[0]), G.nodes().index(edge[1])] = 1
+
+    # Normalize the adjacency matrix to create a transition matrix
+    tran_matrix = adj_matrix / np.sum(adj_matrix, axis=1, keepdims=True)
+
+    random_surf = np.ones(shape=(n_nodes, n_nodes)) / n_nodes    
+    absorbing_nodes = np.zeros(shape=(n_nodes,))
+    for node in G.nodes():
+        if len(G.out_edges(node)) == 0:
+            absorbing_nodes[G.nodes().index(node)] = 1  # Use the index of the node
+
+    absorbing_node_matrix = np.outer(absorbing_nodes, np.ones(shape=(n_nodes,))) / n_nodes
+    stochastic_matrix = tran_matrix + absorbing_node_matrix
+    pagerank_matrix = alpha * stochastic_matrix + (1 - alpha) * random_surf
+    return pagerank_matrix
+
+if __name__ == "__main__":
+    alpha = 0.8
+    n_iter = 1000
+    G_loaded = nx.read_graphml("./dataset/Reddit-graph-str-4.graphml")
+    # G = G_loaded.subgraph(get_Subgraph(G_loaded, prob=0.01))
+    final_probs = run1(G_loaded, alpha, n_iter)
+    sys.exit(0)
+
+    # (adj_matrix, axis=1).reshape(-1,1)
+    # random_surf = np.ones(shape = (n_nodes, n_nodes)) / n_nodes    
+    # absorbing_nodes = np.zeros(shape = (n_nodes,))
+    # for node in G.nodes():
+    #     if len(G.out_edges(node))==0:
+    #         absorbing_nodes[node] = 1
+    # absorbing_node_matrix = np.outer(absorbing_nodes, np.ones(shape = (n_nodes,))) / n_nodes
+    # stochastic_matrix = tran_matrix + absorbing_node_matrix
+    # pagerank_matrix = alpha * stochastic_matrix + (1-alpha) * random_surf
+    # return pagerank_matrix
+
+
+def random_walk(G, alpha, n_iter):
+    n_nodes = len(G.nodes())
+    initial_state = np.ones(shape=(n_nodes,)) / n_nodes
+    pagerank_matrix = make_pagerank_matrix(G, alpha)
+
+    new_initial_state = initial_state
+    print('Running random walk..')
+    NORM = []
+    for i in range(n_iter):
+        final_state = np.dot(np.transpose(pagerank_matrix), new_initial_state)
+        
+        prev_initial_state = new_initial_state
+        new_initial_state = final_state
+        L2 = np.linalg.norm(new_initial_state-prev_initial_state)
+        NORM.append(L2)
+        if np.allclose(new_initial_state, prev_initial_state):
+            print(f'Converged at {i+1} iterations..')
+            break
+    print(NORM)
+    plt.figure(figsize=(5,4))
+    plt.plot(range(i+1), NORM)
+    plt.xlabel('iterations')
+    plt.ylabel('Euclidean Norm')
+    plt.title('Convergence plot')
+    plt.show()
+    return final_state
+
+
+def run(G, alpha, n_iter):
+
+    G, int2node = make_graph(G)
+    print('Number of nodes: ', len(G.nodes()))
+    print('Number of edges: ', len(G.edges())) 
+    print()    
+
+    final_probs = random_walk(G, alpha, n_iter)
+    assert len(final_probs) == len(G.nodes())
+    assert np.allclose(np.sum(final_probs), 1)
+
+    print()
+    print('Pagerank importances..')
+    print(final_probs)
+
+    plt.figure(figsize=(25,8))
+    plt.subplot(121)
+    plot_graph(G, None, int2node, bool_final_probs=False)
+    plt.subplot(122)
+    plot_graph(G, final_probs, int2node, bool_final_probs=True)
+    plt.show()
+    return final_probs
+
+if __name__ == "__main__":
+    alpha = 0.8
+    n_iter = 1000
+    G_loaded = nx.read_graphml("./dataset/Reddit-graph-str-2.graphml")
+    # final_probs = run(G_loaded, alpha, n_iter)
+    # sys.exit(0)
+
+class WeightedPageRank():
+    def __init__(self, damping_factor: float=0.85, epsilon: float=1e-10) -> None:  
+
+        self.damping_factor = damping_factor
+        self.epsilon = epsilon
+    
+    def _initalize_pagerank(self, graph) -> np.array:
+        return (1/graph.get_number_nodes())*np.ones((graph.get_number_nodes(),1))
+        
+    def _identity_vector(self, graph) -> np.array:
+        return np.ones((graph.get_number_nodes(),1))
+
+
+    # NORM = []
+    # for i in range(n_iter):
+    #     final_state = np.dot(np.transpose(pagerank_matrix), new_initial_state)
+        
+    #     prev_initial_state = new_initial_state
+    #     new_initial_state = final_state
+    #     L2 = np.linalg.norm(new_initial_state-prev_initial_state)
+    #     NORM.append(L2)
+    #     if np.allclose(new_initial_state, prev_initial_state):
+    #         print(f'Converged at {i+1} iterations..')
+    #         break
+
+    # plt.figure(figsize=(5,4))
+    # plt.plot(range(i+1), NORM)
+    # plt.xlabel('iterations')
+    # plt.ylabel('Euclidean Norm')
+    # plt.title('Convergence plot')
+    # plt.show()
+    # return final_state
+    def evaluate(self, graph) -> dict:
+        # obtain nodes from graph
+        nodes = graph.get_nodes()
+        # setup initial pagerank steps
+        prev_initial_state = self._initalize_pagerank(graph)
+        I  = self._identity_vector(graph)
+        new_initial_state = self._step(prev_initial_state, I, graph)
+        NORM = []
+        NORM.append(np.linalg.norm(new_initial_state-prev_initial_state))
+        # step through the algorithm, updating our pageranks
+        i = 0
+        while(np.linalg.norm(prev_initial_state - new_initial_state) >= self.epsilon):
+            i += 1
+            print(i)
+            final_state = self._step(prev_initial_state, I, graph)
+            prev_initial_state = new_initial_state
+            new_initial_state = final_state
+            L2 = np.linalg.norm(new_initial_state-prev_initial_state)
+            NORM.append(L2)
+            # if np.allclose(new_initial_state, prev_initial_state):
+            #     print(f'Converged at {i+1} iterations..')
+            #     break
+        # plt.figure(figsize=(5,4))
+        # plt.plot(range(len(NORM)) , NORM)
+        # plt.xlabel('iterations')
+        # plt.ylabel('Euclidean Norm')
+        # plt.title('Convergence plot')
+        # plt.show()
+        # package results and return
+        pageranks = {}
+        for node, rank in zip(nodes,new_initial_state.flatten()):
+            pageranks[node] = rank
+        return pageranks,NORM,i
+    def _step(self, prev_initial_state: np.array, I: np.array, graph) -> np.array:
+        new_initial_state = (
+            self.damping_factor*np.matmul(graph.get_weighted_adjacency_matrix(),prev_initial_state) 
+            + (1 - self.damping_factor)*I/graph.get_number_nodes()
+        )
+        return(new_initial_state/np.sum(new_initial_state))
+
+G,i2n = make_graph(G_loaded)
+np.mean(WeightedGraph(G.edges).get_weighted_adjacency_matrix()) 
+# create a pagerank object
+graph = WeightedGraph(G.edges)
+rank,NORM,i = WeightedPageRank().evaluate(graph)
+# rank
+print(time.time() - start)
+
+
+
+
+class Weighted_PageRank:
+    class WeightedGraph():
+        def __init__(self, edges) -> None:
+            # initialize objects
+            nodes = set()
+            indegrees = {}
+            outdegrees = {}
+            # determine the unique set of nodes in the graph, and count number of outbound edges per source node
+            for edge in edges:
+                nodes.update(list(edge))
+                src, dst = edge
+                try:
+                    outdegrees[src] += 1
+                except:
+                    outdegrees[src] = 1
+                try:
+                    indegrees[dst] += 1
+                except:
+                    indegrees[dst] = 1
+            nodes = list(nodes)
+            nodes.sort()
+            # store graph data
+            self.edges = edges
+            self.nodes = nodes
+            self.number_nodes = len(nodes)
+            self.number_edges = len(edges)
+            self.indegrees = indegrees
+            self.outdegrees = outdegrees
+            
+        # def _build_weight_matrix(self) -> np.array:
+        #     W = np.zeros((len(self.nodes),len(self.nodes)))
+        #     edges = np.array(self.edges)
+        #     for node in self.nodes:
+        #         # get all outgoing link nodes from node
+        #         out_nodes = np.unique(edges[edges[:,0] == node][:,1])
+        #         # get counts of incoming and outgoing links for all out_nodes
+        #         I = np.array(list(map(self.indegrees.get, out_nodes)))
+        #         I[I == None] = 0
+        #         O = np.array(list(map(self.outdegrees.get, out_nodes)))
+        #         O[O == None] = 0
+        #         # compute weight components
+        #         w_in = I/np.sum(I)
+        #         w_out = O/np.sum(O)
+        #         # fill in weights matrix
+        #         col_idx = [self.nodes.index(node) for node in out_nodes]
+        #         W[self.nodes.index(node),col_idx] = w_in*w_out
+        #     return W
+
+        def compute_weights_for_node(self, node, edges):
+            # Get all outgoing link nodes from node
+            out_nodes = np.unique(edges[edges[:, 0] == node][:, 1])
+            # Get counts of incoming and outgoing links for all out_nodes
+            I = np.array(list(map(self.indegrees.get, out_nodes)))
+            I[I == None] = 0
+            O = np.array(list(map(self.outdegrees.get, out_nodes)))
+            O[O == None] = 0
+            # Compute weight components
+            w_in = I / np.sum(I) if np.sum(I) != 0 else np.zeros_like(I)
+            w_out = O / np.sum(O) if np.sum(O) != 0 else np.zeros_like(O)
+            # Determine column indices for out_nodes
+            col_idx = [self.nodes.index(node) for node in out_nodes]
+            row_idx = self.nodes.index(node)
+            return row_idx, col_idx, w_in * w_out
+
+        def _build_weight_matrix(self) -> np.array:
+            W = np.zeros((len(self.nodes), len(self.nodes)))
+            edges = np.array(self.edges)
+
+            # Use Pool with the compute_weights_for_node as a method of the class
+            with Pool(cpu_count()) as pool:
+                results = pool.starmap(self.compute_weights_for_node, [(node, edges) for node in self.nodes])
+
+            # Fill in the weights matrix in the main thread to avoid potential conflicts
+            for row_idx, col_idx, weights in results:
+                W[row_idx, col_idx] = weights
+
+            return W
+
+        def get_weighted_adjacency_matrix(self) -> np.array:
+            # get the raw weight matrix
+            W = self._build_weight_matrix()
+            # normalize weights & return
+            denominator = np.sum(W,axis=1)
+            denominator = np.where(denominator == 0, 1., denominator)
+            return (W.T/denominator)
+        
+        def _build_adjacency_matrix(self) -> np.array:
+            O = np.zeros((self.number_nodes,self.number_nodes))
+            for edge in self.edges:
+                src, dst = edge
+                O[self.nodes.index(dst),self.nodes.index(src)] += 1
+            return O
+
+        def _build_outdegree_matrix(self) -> np.array:
+            D = np.zeros((self.number_nodes,self.number_nodes))
+            for node in self.nodes:
+                try:
+                    D[self.nodes.index(node),self.nodes.index(node)] = 1/self.outdegrees[node]
+                except:
+                    D[self.nodes.index(node),self.nodes.index(node)] = 0
+            return D
+        
+        def get_modified_adjacency_matrix(self) -> np.array:
+            return np.matmul(self._build_adjacency_matrix(),self._build_outdegree_matrix())
+        
+        def get_edges(self):
+            return self.edges
+
+        def get_nodes(self) :
+            return self.nodes
+
+        def get_number_edges(self) -> int:
+            return self.number_edges
+
+        def get_number_nodes(self) -> int:
+            return self.number_nodes
+
+        def get_indegrees(self) -> dict:
+            return self.indegrees
+        
+        def get_outdegrees(self) -> dict:
+            return self.outdegrees
+        
+    def __init__(self, edges, int2node=None, damping_factor: float=0.85, epsilon: float=1e-10) -> None:  
+
+        self.damping_factor = damping_factor
+        self.epsilon = epsilon
+        self.graph = self.WeightedGraph(edges)
+        self.int2node = int2node
+    
+    def _initalize_pagerank(self, graph) -> np.array:
+        return (1/graph.get_number_nodes())*np.ones((graph.get_number_nodes(),1))
+        
+    def _identity_vector(self, graph) -> np.array:
+        return np.ones((graph.get_number_nodes(),1))
+
+    def _step(self, prev_initial_state: np.array, I: np.array, graph) -> np.array:
+        new_initial_state = (
+            self.damping_factor*np.matmul(graph.get_weighted_adjacency_matrix(),prev_initial_state) 
+            + (1 - self.damping_factor)*I/graph.get_number_nodes()
+        )
+        return(new_initial_state/np.sum(new_initial_state))
+
+    def evaluate(self):
+        return self._evaluate(self.graph)
+
+    def _evaluate(self, graph) -> dict:
+        # obtain nodes from graph
+        nodes = graph.get_nodes()
+        # setup initial pagerank steps
+        prev_initial_state = self._initalize_pagerank(graph)
+        I  = self._identity_vector(graph)
+        new_initial_state = self._step(prev_initial_state, I, graph)
+        L2 = [np.linalg.norm(new_initial_state-prev_initial_state)]
+        i = 0
+        while(np.linalg.norm(prev_initial_state - new_initial_state) >= self.epsilon):
+            i += 1
+            final_state = self._step(prev_initial_state, I, graph)
+            prev_initial_state = new_initial_state
+            new_initial_state = final_state
+            l2 = np.linalg.norm(new_initial_state-prev_initial_state)
+            L2.append(l2)
+            if np.allclose(new_initial_state, prev_initial_state):
+                print(f'Converged at {i+1} iterations..')
+                break
+        pageranks = [0.0] * len(nodes) 
+        for node, rank in zip(nodes,new_initial_state.flatten()):
+            pageranks[node] = float(rank)
+        return pageranks,L2,i
+    
+    def _evaluate(self, graph) -> dict:
+        nodes = graph.get_nodes()
+        prev_initial_state = self._initalize_pagerank(graph)
+        I = self._identity_vector(graph)
+
+        # Compute the first step
+        new_initial_state = self._step(prev_initial_state, I, graph)
+        norm_diff = np.linalg.norm(new_initial_state - prev_initial_state)
+
+        norms = [norm_diff]
+        iterations = 0
+        while norm_diff >= self.epsilon:
+            iterations += 1
+            prev_initial_state, new_initial_state = new_initial_state, self._step(new_initial_state, I, graph)
+            norm_diff = np.linalg.norm(new_initial_state - prev_initial_state)
+            norms.append(norm_diff)
+            # Early exit check
+            if np.allclose(new_initial_state, prev_initial_state, atol=self.epsilon):
+                break
+
+        # # Package results
+        # pageranks = [0.0] * len(nodes)
+        # for node, rank in zip(nodes, new_initial_state.flatten()):
+        #     pageranks[node] = float(rank)
+        # Package results as a NumPy array
+        pageranks = np.zeros(len(nodes))
+        pageranks[list(nodes)] = new_initial_state.flatten()
+        return pageranks, norms, iterations
+    
+
+
+    # class Weighted_PageRank:
+    #     def __init__(self, edges, int2node, alpha=0.85, iter=10000, epsilon=1e-8):
+    #         self.int2node = int2node
+    #         self.alpha = alpha
+    #         self.epsilon = epsilon
+    #         self.iter = iter
+    #         # Initialize a networkx directed graph from edges
+    #         self.graph = nx.DiGraph(edges)
+    #         self.nodes = sorted(self.graph.nodes())
+    #         self.number_nodes = len(self.nodes)
+    #         self.W = self.build_weight_matrix()
+
+    #     def compute_weights_for_node(self, node):
+    #         out_nodes = list(self.graph.successors(node))
+    #         if not out_nodes:
+    #             return self.nodes.index(node), [], []  # No outgoing edges, skip weight calculation
+
+    #         I = np.array([self.graph.in_degree(n, weight="weight") or 0 for n in out_nodes])
+    #         O = np.array([self.graph.out_degree(n, weight="weight") or 0 for n in out_nodes])
+
+    #         # Compute weight components
+    #         w_in = I / np.sum(I) if np.sum(I) != 0 else np.zeros_like(I)
+    #         w_out = O / np.sum(O) if np.sum(O) != 0 else np.zeros_like(O)
+
+    #         # Find indices for matrix placement
+    #         col_idx = [self.nodes.index(n) for n in out_nodes]
+    #         row_idx = self.nodes.index(node)
+    #         return row_idx, col_idx, w_in * w_out
+
+    #     def build_weight_matrix(self):
+    #         W = np.zeros((self.number_nodes, self.number_nodes))
+    #         with Pool(cpu_count()) as pool:
+    #             results = pool.map(self.compute_weights_for_node, self.nodes)
+            
+    #         # Fill in the weight matrix
+    #         for row_idx, col_idx, weights in results:
+    #             W[row_idx, col_idx] = weights
+    #         return W
+
+    #     def get_weighted_adjacency_matrix(self):
+    #         # Normalize rows to ensure stochastic matrix properties
+    #         denominator = np.sum(self.W, axis=1)
+    #         denominator = np.where(denominator == 0, 1., denominator)
+    #         return (self.W.T / denominator).T
+
+    #     def evaluate(self):
+    #         I = np.ones((self.number_nodes, 1))
+    #         new_state = np.ones((self.number_nodes, 1)) / self.number_nodes
+    #         norms = []
+    #         for _ in range(self.iter):
+    #             prev_state = new_state
+    #             new_state = self.alpha * self.get_weighted_adjacency_matrix().dot(prev_state) + (1 - self.alpha) * I / self.number_nodes
+    #             l2 = np.linalg.norm(new_state - prev_state)
+    #             norms.append(l2)
+    #             if l2 <= self.epsilon: break
+    #         pageranks = new_state.flatten()
+    #         return pageranks, norms
+
+
+
+    @staticmethod
+    def plot_graph(G, final_probs, int2node, bool_final_probs=False):
+        labels = int2node
+        try:
+            clubs = np.array(list(map(lambda x: G.nodes[x]['club'], G.nodes())))
+            labels = dict(zip(G.nodes(), clubs)) 
+        except:
+            pass   
+
+        plt.figure(figsize=(8, 6))
+        if not bool_final_probs:
+            nx.draw(G, with_labels=True, alpha=0.8, arrows=False, labels=labels)
+        else:
+            pos = nx.spring_layout(G) 
+            nodes = nx.draw(G, pos, with_labels=True, alpha=0.8, arrows=False, node_color=final_probs, cmap=plt.get_cmap('viridis'), labels=labels)
+            sm = plt.cm.ScalarMappable(cmap=plt.get_cmap('viridis'), norm=plt.Normalize(vmin=min(final_probs), vmax=max(final_probs)))
+            sm.set_array([])
+            plt.colorbar(sm, ax=plt.gca())
+
+        plt.show()
+    
+    @staticmethod
+    def plot_graph_arrow(G, final_probs, int2node, bool_final_probs=False):
+        labels = int2node
+
+        try:
+            clubs = np.array(list(map(lambda x: G.nodes[x]['club'], G.nodes())))
+            labels = dict(zip(G.nodes(), clubs))
+        except:
+            pass
+
+        if not bool_final_probs:
+            nx.draw_networkx(G, with_labels=True, alpha=0.8, arrows=True, labels=labels)
+        else:
+            pos = nx.spring_layout(G)
+            nodes = nx.draw_networkx(
+                G, pos, with_labels=True, alpha=0.8, arrows=True,
+                node_color=final_probs, cmap=plt.get_cmap('viridis'), labels=labels
+            )
+            sm = plt.cm.ScalarMappable(cmap=plt.get_cmap('viridis'), norm=plt.Normalize(vmin=min(final_probs), vmax=max(final_probs)))
+            sm.set_array([])
+            plt.colorbar(sm, ax=plt.gca())
+        plt.show()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        import numpy as np
+import networkx as nx
+from Utils.Graph import Graph as GG
+
+
+class WeightedPageRank:
+    def __init__(self, graph, alpha: float = 0.85, max_iter=10000, epsilon: float = 1e-8) -> None:
+        self.alpha = alpha
+        self.epsilon = epsilon
+        self.graph = graph
+        self.nodes = sorted(graph.nodes())
+        self.number_nodes = len(self.nodes)
+        self.number_edges = len(self.graph.edges)
+        self.max_iter = max_iter
+
+
+    def _build_weight_matrix(self):
+        indegrees = dict(self.graph.in_degree())
+        outdegrees = dict(self.graph.out_degree())
+        W = np.zeros((self.number_nodes, self.number_nodes))
+        edges = np.array(self.graph.edges)
+        for node in self.nodes:
+            out_nodes = np.unique(edges[edges[:,0] == node][:,1])
+            I = np.array([indegrees.get(i, 0) for i in out_nodes])
+            O = np.array([outdegrees.get(i, 0) for i in out_nodes])
+            w_in, w_out = I/np.sum(I), O/np.sum(O)
+            col_idx = [self.nodes.index(node) for node in out_nodes]
+            W[self.nodes.index(node),col_idx] = w_in*w_out
+        return W
+
+    def get_weighted_adj_matrix(self):
+        W = self._build_weight_matrix()
+        denominator = np.sum(W,axis=1)
+        denominator = np.where(denominator == 0, 1., denominator)
+        return (W.T/denominator)
+
+    def evaluate(self):
+        state = np.ones((self.number_nodes, 1)) / self.number_nodes
+        Id = np.ones((self.number_nodes, 1))
+
+        norms = []
+        for it in range(self.max_iter):
+            new_state = self.alpha * np.matmul(self.get_weighted_adj_matrix(), state) + (1 - self.alpha) * Id / self.number_nodes
+            new_state /= np.sum(new_state)
+            norm = np.linalg.norm(new_state - state, ord=1)
+            norms.append(norm)
+            if norm <= self.epsilon: break
+            state = new_state
+        return {node: rank for node, rank in zip(self.nodes, new_state.flatten())}
+
+
+G = nx.read_graphml("./dataset/IMDB-graph-int-2.graphml")
+G_sp, int2node_sp, W = GG.make_graph(G)
+
+# create a graph object
+pr = WeightedPageRank(G_sp)
+w = pr._build_weight_matrix()
+ranks = pr.evaluate()
+rank = sorted(ranks.keys(), key=lambda x: ranks[x], reverse=True)[:10]
+print({r : ranks[r] for r in rank})
+
+G = nx.from_numpy_array(w, create_using=nx.DiGraph)
+nx_pagerank_wtd = nx.pagerank(G, alpha=0.85, max_iter=1000, weight='weight')
+nx_rank_wtd = [(node, score) for node, score in nx_pagerank_wtd.items()]
+top_n_nx_wtd_rank = sorted(nx_rank_wtd, key=lambda x: x[1], reverse=True)[:10]
+print(top_n_nx_wtd_rank)
